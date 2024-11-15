@@ -9,7 +9,10 @@ if [[ ! -d "$DIR" ]]; then
     exit 1
 fi
 
-# Iterate over all folders in the directory
+# Collect folders with dots and simulate the renaming
+declare -A FOLDERS_TO_RENAME
+
+# Scan the directory for folders with dots in their names
 echo "Scanning for folders with dots in their names in: $DIR"
 for FOLDER in "$DIR"/*/; do
     # Strip the trailing slash
@@ -21,19 +24,47 @@ for FOLDER in "$DIR"/*/; do
         
         # Check if the folder name contains dots
         if [[ "$BASENAME" == *.* ]]; then
-            # Replace dots with nothing
-            NEWNAME="${BASENAME//./}"
-            NEWPATH="$DIR/$NEWNAME"
-
-            # Avoid overwriting existing folders
-            if [[ -e "$NEWPATH" ]]; then
-                echo "Skipping: Target folder '$NEWPATH' already exists."
-            else
-                echo "Renaming: '$FOLDER' -> '$NEWPATH'"
-                mv "$FOLDER" "$NEWPATH"
-            fi
+            # Replace dots with spaces
+            NEWNAME="${BASENAME//./ }"
+            FOLDERS_TO_RENAME["$FOLDER"]="$NEWNAME"
         fi
     fi
 done
 
-echo "Operation complete."
+# If no folders to rename, exit early
+if [[ ${#FOLDERS_TO_RENAME[@]} -eq 0 ]]; then
+    echo "No folders with dots found in the directory: $DIR"
+    exit 0
+fi
+
+# Preview the changes
+echo "Preview of folders to be renamed:"
+for FOLDER in "${!FOLDERS_TO_RENAME[@]}"; do
+    NEWNAME="${FOLDERS_TO_RENAME["$FOLDER"]}"
+    echo "  Folder: $FOLDER -> New Name: $DIR/$NEWNAME"
+done
+
+# Ask for confirmation before proceeding
+read -p "Do you want to proceed with renaming? [y/n]: " CONFIRM
+if [[ "$CONFIRM" != "y" ]]; then
+    echo "Operation cancelled."
+    exit 0
+fi
+
+# Perform the renaming
+COUNT=0
+for FOLDER in "${!FOLDERS_TO_RENAME[@]}"; do
+    NEWNAME="${FOLDERS_TO_RENAME["$FOLDER"]}"
+    
+    # Avoid overwriting existing folders
+    if [[ -e "$DIR/$NEWNAME" ]]; then
+        echo "Skipping: Target folder '$DIR/$NEWNAME' already exists."
+    else
+        echo "Renaming: '$FOLDER' -> '$DIR/$NEWNAME'"
+        mv "$FOLDER" "$DIR/$NEWNAME"
+        ((COUNT++))
+    fi
+done
+
+# Summary
+echo "Operation completed. Renamed $COUNT folders."
